@@ -119,7 +119,7 @@ function App() {
         <Card>
           <CardHeader>
             <CardTitle className="text-center text-2xl font-bold">
-              {selectedLayout} Layout Configuration
+              IRACT Post Creator
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
