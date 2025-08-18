@@ -1,286 +1,411 @@
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
-import { toast } from "sonner";
+import React, { useState, useEffect } from 'react';
+import SavedUrlsDialog from './components/SavedUrlsDialog';
+import {
+  Card,
+  CardContent,
+} from "@/components/ui/card"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { supabase } from '@/utils/supabase'
+import { Button } from './components/ui/button';
+import { Download, LoaderCircle, RefreshCw } from 'lucide-react';
+import { Loader2 } from "lucide-react";
+import type { Dataset } from './const/Dataset';
+import type { FormDataValue } from './const/FormDataValue';
+import type { SubmissionData } from './const/SubmissionData';
+import type { CanvaTemplate } from './const/CanvaTemplate';
+import VariableTextInput from './components/VariableTextInput';
+import ImageInput from './components/ImageInput';
 
-const layoutOptions = ["Basic", "Versus"] as const;
-type LayoutTypes = (typeof layoutOptions)[number];
 
 function App() {
-  const [selectedLayout, setSelectedLayout] = useState<LayoutTypes>("Basic");
+  //apik
+  const WEBHOOK_DATASET_QUERY: string = import.meta.env.VITE_IRACT_DATASET_QUERY_API_ENDPOINT as string;
+  const WEBHOOK_V2: string = import.meta.env.VITE_IRACT_CREATE_V2_API_ENDPOINT as string;
 
-  // Common fields
-  const [logoImage, setLogoImage] = useState<File | null>(null);
-  const [description, setDescription] = useState("");
 
-  // Basic layout
-  const [coverImage, setCoverImage] = useState<File | null>(null);
+  const [brandUrl, setBrandUrl] = useState<string>('');
+  const [savedTemplates, setSavedTemplates] = useState<CanvaTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [datasetStructure, setDatasetStructure] = useState<Dataset | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [loadingImage, setLoadingImage] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
+  const [formData, setFormData] = useState<FormDataValue>({});
+  const [submittedData, setSubmittedData] = useState<SubmissionData | null>(null);
 
-  // Versus layout
-  const [beforeImage, setBeforeImage] = useState<File | null>(null);
-  const [afterImage, setAfterImage] = useState<File | null>(null);
+  useEffect(() => {
+    fetchSavedTemplates();
+  }, []);
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [resultImage, setResultImage] = useState<string | null>(null);
-
-  const handleFileChange = (
-    file: File | null,
-    setter: (value: File | null) => void
-  ) => setter(file);
-
-  const handleSubmit = async () => {
-    // validation: at least one image or description
-    const hasInput =
-      description.trim() ||
-      logoImage ||
-      (selectedLayout === "Basic" && coverImage) ||
-      (selectedLayout === "Versus" && (beforeImage || afterImage));
-
-    if (!hasInput) {
-      alert("Please provide at least a description or an image.");
-      return;
-    }
-
-    setIsSubmitting(true);
-    setResultImage(null);
-
+  const fetchSavedTemplates = async (): Promise<void> => {
     try {
-      const formData = new FormData();
-      if (description.trim()) formData.append("Description", description);
-      if (logoImage) formData.append("Logo", logoImage);
+      const { data, error } = await supabase
+        .from('iract_canvaTemplates')
+        .select('*')
+        .order('name', { ascending: true });
 
-      let url = "";
-
-      if (selectedLayout === "Basic") {
-        url =
-          "https://n8n.prometheusagency.hu/webhook/create-iract/basic";
-        if (coverImage) formData.append("Image", coverImage);
-      } else {
-        url =
-          "https://n8n.prometheusagency.hu/webhook/create-iract/versus";
-        if (beforeImage) formData.append("Before", beforeImage);
-        if (afterImage) formData.append("After", afterImage);
+      if (error) {
+        console.error("Error fetching templates:", error);
+        return;
       }
 
-      const response = await fetch(url, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Status ${response.status}: ${errorText}`);
+      if (data) {
+        setSavedTemplates(data);
       }
-
-      const result = await response.json();
-      if (result.productUrl) {
-        setResultImage(result.productUrl);
-        toast.success("Yaay, the image is ready 🎉");
-      } else {
-        toast.warning("Successfully created, but no image URL was returned.");
-      }
-    } catch (error) {
-      console.error("Submission failed:", error);
-      toast.error("Network or server error. Please try again.");
-    } finally {
-      setIsSubmitting(false);
+    } catch (err) {
+      console.error("Error fetching templates:", err);
     }
   };
 
+  const handleTemplateSelect = (templateId: string): void => {
+    setSelectedTemplateId(templateId);
+    const selectedTemplate = savedTemplates.find(template => template.id.toString() === templateId);
+
+    if (selectedTemplate) {
+      setBrandUrl(selectedTemplate.url);
+      fetchDatasetStructure(selectedTemplate.url);
+    }
+
+    setDatasetStructure(null);
+    setFormData({});
+    setSubmittedData(null);
+    setError('');
+  };
+
+
   const handleDownload = async () => {
-    if (!resultImage) return;
+
+    //Ezt a részt Claude írta, nem minding működik
+    if (!submittedData?.productUrl) return;
 
     try {
-      const response = await fetch(resultImage);
+      const response = await fetch(submittedData.productUrl);
       const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
+      const url = window.URL.createObjectURL(blob);
 
       const a = document.createElement("a");
       a.href = url;
-      a.download = "generated-product.png";
+      a.download = "product.png";
       document.body.appendChild(a);
       a.click();
-
-      URL.revokeObjectURL(url);
       document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error("Download failed:", error);
-      alert("Download failed. Please try again.");
+      console.error("Failed to download file:", error);
     }
   };
 
+  const fetchDatasetStructure = async (urlFromTemplate?: string): Promise<void> => {
+    const urlToUse = urlFromTemplate || brandUrl;
+    if (!urlToUse.trim()) {
+      setError('Please select a template first');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const url = new URL(WEBHOOK_DATASET_QUERY);
+      url.searchParams.append('brandUrl', urlToUse);
+
+      const response = await fetch(url, { method: 'GET' });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data: { dataset: Dataset } = await response.json();
+
+      if (data.dataset) {
+        setDatasetStructure(data.dataset);
+
+        // Ez itt sok időbe tellett :(
+        const initialFormData: FormDataValue = {};
+        Object.keys(data.dataset).forEach((fieldName: string) => {
+          if (data.dataset[fieldName].type === 'text') {
+            initialFormData[fieldName] = '';
+          } else if (data.dataset[fieldName].type === 'image') {
+            initialFormData[fieldName] = null;
+          }
+        });
+        setFormData(initialFormData);
+      } else {
+        throw new Error('Invalid response format - missing dataset property');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      setError(`Failed to fetch dataset: ${errorMessage}`);
+      setDatasetStructure(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  //nem tudom hogy ezek hogyan működnek de teszik a dolguk
+  const handleInputChange = (fieldName: string, value: string): void => {
+    setFormData(prev => ({
+      ...prev,
+      [fieldName]: value
+    }));
+  };
+
+  const handleFileChange = (fieldName: string, file: File | null): void => {
+    setFormData(prev => ({
+      ...prev,
+      [fieldName]: file
+    }));
+  };
+
+  const handleSubmit = async (): Promise<void> => {
+    if (!datasetStructure) return;
+
+    setLoadingImage(true);
+
+    const formDataToSend = new FormData();
+    formDataToSend.append("brandUrl", brandUrl);
+
+    for (const [fieldName, value] of Object.entries(formData)) {
+      const fieldType = datasetStructure[fieldName]?.type;
+
+      if (fieldType === "text") {
+        formDataToSend.append(fieldName, (value as string) || "");
+      } else if (fieldType === "image" && value instanceof File) {
+        formDataToSend.append(fieldName, value);
+      } else if (fieldType === "image" && !value) {
+        formDataToSend.append(fieldName, "data");
+      }
+    }
+
+    try {
+      const response = await fetch(
+        WEBHOOK_V2,
+        {
+          method: "POST",
+          body: formDataToSend,
+        }
+      );
+
+      const result = await response.json();
+      console.log("Success:", result);
+      setSubmittedData(result);
+    } catch (error) {
+      console.error("Error submitting form:", error);
+    } finally {
+      setLoadingImage(false);
+    }
+  };
+
+
+  // EZ a legértékesebb kód részlet a projektben!
+  const renderFormFields = (): React.ReactNode[] => {
+    if (!datasetStructure) return [];
+
+    return Object.entries(datasetStructure).map(([fieldName, fieldConfig]) => {
+      if (fieldConfig.type === "text") {
+        return (
+          <VariableTextInput
+            key={fieldName}
+            label={fieldName}
+            value={(formData[fieldName] as string) || ""}
+            onChange={(value) => handleInputChange(fieldName, value)}
+          />
+        );
+      } else if (fieldConfig.type === "image") {
+        return (
+          <ImageInput
+            key={fieldName}
+            label={fieldName}
+            file={formData[fieldName] as File | null}
+            onChange={(file) => handleFileChange(fieldName, file)}
+          />
+        );
+      }
+      return null;
+    });
+  };
+
+  const resetForm = (): void => {
+    if (datasetStructure) {
+      const resetFormData: FormDataValue = {};
+      Object.keys(datasetStructure).forEach((fieldName: string) => {
+        if (datasetStructure[fieldName].type === 'text') {
+          resetFormData[fieldName] = '';
+        } else if (datasetStructure[fieldName].type === 'image') {
+          resetFormData[fieldName] = null;
+        }
+      });
+      setFormData(resetFormData);
+    }
+    setSubmittedData(null);
+    setError('');
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-2xl mx-auto">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-center text-2xl font-bold">
-              IRACT Post Creator
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Layout Selector */}
-            <div className="space-y-2">
-              <Label htmlFor="layout">Layout</Label>
-              <Select
-                value={selectedLayout}
-                onValueChange={(value: LayoutTypes) => setSelectedLayout(value)}
-              >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Choose layout" />
-                </SelectTrigger>
-                <SelectContent>
-                  {layoutOptions.map((layout) => (
-                    <SelectItem key={layout} value={layout}>
-                      {layout}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+    <div className="max-w-7xl mx-auto p-6 bg-white h-screen flex flex-col">
+      <div className="flex items-center justify-center gap-4 mb-8">
+        <img
+          src="/bat.svg"
+          alt="Logo"
+          className="h-10 w-10 object-contain"
+        />
+        <h1 className="text-3xl font-bold text-gray-800">
+          IRACT Post Creator
+        </h1>
+      </div>
+      {/* Two column layout */}
+      <div className="flex-1 flex flex-col lg:flex-row gap-6 overflow-hidden">
+        {/* LEFT SIDE (Selector + Components + Submit) */}
+        <div className="flex flex-col lg:max-w-md w-full border rounded-lg">
+          {/* Fixed Template Selector */}
+          <div className="bg-gray-50 p-6 border-b">
+            <div className="mb-3 w-full">
+              <SavedUrlsDialog />
             </div>
-
-            {/* Conditional fields */}
-            {selectedLayout === "Basic" && (
-              <div className="space-y-2">
-                <Label htmlFor="cover-image">Cover Image</Label>
-                <Input
-                  id="cover-image"
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) =>
-                    handleFileChange(e.target.files?.[0] || null, setCoverImage)
-                  }
-                  className="cursor-pointer"
-                />
-                {coverImage && (
-                  <p className="text-sm text-green-600">
-                    ✓ Cover image uploaded ({coverImage.name})
-                  </p>
-                )}
-              </div>
-            )}
-
-            {selectedLayout === "Versus" && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="before-image">Before Image</Label>
-                  <Input
-                    id="before-image"
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) =>
-                      handleFileChange(
-                        e.target.files?.[0] || null,
-                        setBeforeImage
-                      )
-                    }
-                    className="cursor-pointer"
-                  />
-                  {beforeImage && (
-                    <p className="text-sm text-green-600">
-                      ✓ Before image uploaded ({beforeImage.name})
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="after-image">After Image</Label>
-                  <Input
-                    id="after-image"
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) =>
-                      handleFileChange(
-                        e.target.files?.[0] || null,
-                        setAfterImage
-                      )
-                    }
-                    className="cursor-pointer"
-                  />
-                  {afterImage && (
-                    <p className="text-sm text-green-600">
-                      ✓ After image uploaded ({afterImage.name})
-                    </p>
-                  )}
-                </div>
-              </>
-            )}
-
-            {/* Logo Upload */}
-            <div className="space-y-2">
-              <Label htmlFor="logo-image">Logo</Label>
-              <Input
-                id="logo-image"
-                type="file"
-                accept="image/*"
-                onChange={(e) =>
-                  handleFileChange(e.target.files?.[0] || null, setLogoImage)
-                }
-                className="cursor-pointer"
-              />
-              {logoImage && (
-                <p className="text-sm text-green-600">
-                  ✓ Logo uploaded ({logoImage.name})
-                </p>
-              )}
-            </div>
-
-            {/* Description */}
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                placeholder="Enter your description here..."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={4}
-              />
-            </div>
-
-            {/* Submit Button */}
-            <Button
-              onClick={handleSubmit}
-              className="w-full"
-              disabled={
-                isSubmitting ||
-                (!description.trim() &&
-                  !logoImage &&
-                  (selectedLayout === "Basic"
-                    ? !coverImage
-                    : !beforeImage && !afterImage))
-              }
-            >
-              {isSubmitting ? "Generating..." : "Submit"}
-            </Button>
-
-            {/* Result Section */}
-            {resultImage && (
-              <div className="space-y-4 pt-4 border-t">
-                <h3 className="text-lg font-semibold">Generated Result:</h3>
-                <div className="bg-white p-4 rounded-lg border">
-                  <img
-                    src={resultImage}
-                    alt="Generated product"
-                    className="w-full h-auto rounded-lg shadow-sm"
-                  />
-                </div>
-                <Button
-                  onClick={handleDownload}
-                  className="w-full"
-                  variant="outline"
+            <h2 className="text-xl font-bold text-gray-700 mb-2">
+              Select Canva Template
+            </h2>
+            <div className="space-y-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Choose from saved templates
+              </label>
+              <div className="flex gap-2">
+                <Select
+                  value={selectedTemplateId}
+                  onValueChange={handleTemplateSelect}
+                  disabled={savedTemplates.length === 0}
                 >
-                  Download Image
+                  <SelectTrigger className="w-full">
+                    <SelectValue
+                      placeholder={
+                        savedTemplates.length === 0
+                          ? "No templates saved yet"
+                          : "Select a template..."
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {savedTemplates.map((template) => (
+                      <SelectItem
+                        key={template.id}
+                        value={template.id.toString()}
+                      >
+                        {template.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button variant={"outline"} onClick={fetchSavedTemplates}>
+                  <RefreshCw />
                 </Button>
               </div>
+
+              <div className="flex gap-4">
+                {(datasetStructure || error || selectedTemplateId) && (
+                  <Button variant={"outline"} onClick={resetForm}>
+                    Reset
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {error && (
+              <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md">
+                {error}
+              </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+
+          {/* Scrollable Components */}
+          <div className="flex-1 overflow-y-auto p-6">
+            {datasetStructure && (
+              <div>
+                <h2 className="text-xl font-bold text-gray-700 mb-2">
+                  Components
+                </h2>
+                <div className="space-y-4">{renderFormFields()}</div>
+              </div>
+            )}
+          </div>
+
+          {/* Submit Button always visible at bottom */}
+          {datasetStructure && (
+            <div className="bg-gray-50 border-t p-6">
+              <Button
+                onClick={handleSubmit}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-8 rounded-md transition-colors duration-200 flex items-center justify-center"
+                disabled={loadingImage}
+              >
+                {loadingImage ?? loading ? (
+                  <>
+                    Submitting
+                    <Loader2 className="ml-2 h-5 w-5 animate-spin" />
+                  </>
+                ) : (
+                  "Create Image"
+                )}
+              </Button>
+            </div>
+          )}
+
+        </div>
+
+        {/* RIGHT SIDE (Results) */}
+        <div className="flex-1 overflow-y-auto">
+          {loadingImage &&
+            <div className="bg-gray-50 p-6 rounded-lg text-center sticky top-6">
+              <h2 className="text-xl font-bold text-gray-700 mb-4">
+                Generated Product
+              </h2>
+              <Card className="max-w-md mx-auto rounded-md border mb-6">
+                <CardContent className='flex justify-center items-center py-44 flex-col gap-3'>
+                  <LoaderCircle className=" text-gray-700 h-10 w-10 animate-spin" />
+                  <h3 className="text-xl font-semibold text-gray-700">
+                    Your image is underway! 📦
+                  </h3>
+                  <h3 className="text-sm font-semibold text-gray-700">
+                    Here you will see the generated result!
+                  </h3>
+                  <h3 className="text-sm font-semibold text-gray-700">
+                    {"(Generating usually takes around 15-20 seconds)"}
+                  </h3>
+                </CardContent>
+              </Card>
+            </div>
+
+          }
+          {submittedData?.productUrl && (
+            <div className="bg-gray-50 p-6 rounded-lg text-center sticky top-6">
+              <h2 className="text-xl font-semibold text-gray-700 mb-4">
+                Generated Product
+              </h2>
+              <img
+                src={submittedData.productUrl}
+                alt="Generated Product"
+                className="max-w-md mx-auto rounded-md border shadow mb-6"
+              />
+              <div className="flex justify-center gap-4">
+                <Button
+                  onClick={handleDownload}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 rounded-md transition-colors duration-200 flex items-center"
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Download
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
-}
+
+};
 
 export default App;
