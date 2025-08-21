@@ -248,7 +248,8 @@ function App() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-6 bg-white h-screen flex flex-col">
+    <div className="max-w-7xl mx-auto p-6 bg-white">
+      {/* HEADER */}
       <div className="flex items-center justify-center gap-4 mb-8">
         <img
           src="/bat.svg"
@@ -259,8 +260,9 @@ function App() {
           IRACT Post Creator
         </h1>
       </div>
-      {/* Two column layout */}
-      <div className="flex-1 flex flex-col lg:flex-row gap-6 overflow-hidden">
+
+      {/* TWO COLUMN LAYOUT */}
+      <div className="flex flex-col lg:flex-row gap-6">
         {/* LEFT SIDE (Selector + Components + Submit) */}
         <div className="flex flex-col lg:max-w-md w-full border rounded-lg">
           {/* Fixed Template Selector */}
@@ -353,58 +355,60 @@ function App() {
               </Button>
             </div>
           )}
-
         </div>
 
-        {/* RIGHT SIDE (Results) */}
-        <div className="flex-1 overflow-y-auto">
-          {loadingImage &&
-            <div className="bg-gray-50 p-6 rounded-lg text-center sticky top-6">
-              <h2 className="text-xl font-bold text-gray-700 mb-4">
-                Generated Product
-              </h2>
-              <Card className="max-w-md mx-auto rounded-md border mb-6">
-                <CardContent className='flex justify-center items-center py-44 flex-col gap-3'>
-                  <LoaderCircle className=" text-gray-700 h-10 w-10 animate-spin" />
-                  <h3 className="text-xl font-semibold text-gray-700">
-                    Your image is underway! 📦
-                  </h3>
-                  <h3 className="text-sm font-semibold text-gray-700">
-                    Here you will see the generated result!
-                  </h3>
-                  <h3 className="text-sm font-semibold text-gray-700">
-                    {"(Generating usually takes around 15-20 seconds)"}
-                  </h3>
-                </CardContent>
-              </Card>
-            </div>
-
-          }
-          {submittedData?.productUrl && (
-            <div className="bg-gray-50 p-6 rounded-lg text-center sticky top-6">
-              <h2 className="text-xl font-semibold text-gray-700 mb-4">
-                Generated Product
-              </h2>
-              <img
-                src={submittedData.productUrl}
-                alt="Generated Product"
-                className="max-w-md mx-auto rounded-md border shadow mb-6"
-              />
-              <div className="flex justify-center gap-4">
-                <Button
-                  onClick={handleDownload}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 rounded-md transition-colors duration-200 flex items-center"
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  Download
-                </Button>
+        {/* RIGHT SIDE (Sticky Results) */}
+        <div className="flex-1">
+          <div className="sticky top-6">
+            {loadingImage && (
+              <div className="bg-gray-50 p-6 rounded-lg text-center border sticky top-6">
+                <h2 className="text-xl font-bold text-gray-700 mb-4">
+                  Generated Product
+                </h2>
+                <Card className="max-w-md mx-auto rounded-md border mb-6">
+                  <CardContent className="flex justify-center items-center py-44 flex-col gap-3">
+                    <LoaderCircle className=" text-gray-700 h-10 w-10 animate-spin" />
+                    <h3 className="text-xl font-semibold text-gray-700">
+                      Your image is underway! 📦
+                    </h3>
+                    <h3 className="text-sm font-semibold text-gray-700">
+                      Here you will see the generated result!
+                    </h3>
+                    <h3 className="text-sm font-semibold text-gray-700">
+                      {"(Generating usually takes around 15-20 seconds)"}
+                    </h3>
+                  </CardContent>
+                </Card>
               </div>
-            </div>
-          )}
+            )}
+
+            {submittedData?.productUrl && (
+              <div className="bg-gray-50 p-6 rounded-lg text-center border">
+                <h2 className="text-xl font-semibold text-gray-700 mb-4">
+                  Generated Product
+                </h2>
+                <img
+                  src={submittedData.productUrl}
+                  alt="Generated Product"
+                  className="max-w-md mx-auto rounded-md border shadow mb-6"
+                />
+                <div className="flex justify-center gap-4">
+                  <Button
+                    onClick={handleDownload}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 rounded-md transition-colors duration-200 flex items-center"
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Download
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
+
 
 };
 
