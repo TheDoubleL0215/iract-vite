@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/select"
 import { supabase } from '@/utils/supabase'
 import { Button } from './components/ui/button';
-import { Download, LoaderCircle, RefreshCw } from 'lucide-react';
+import { Download, Edit, LoaderCircle, RefreshCw } from 'lucide-react';
 import { Loader2 } from "lucide-react";
 import type { Dataset } from './const/Dataset';
 import type { FormDataValue } from './const/FormDataValue';
@@ -346,7 +346,7 @@ function App() {
               >
                 {loadingImage ?? loading ? (
                   <>
-                    Submitting
+                    Creating wonders...
                     <Loader2 className="ml-2 h-5 w-5 animate-spin" />
                   </>
                 ) : (
@@ -400,6 +400,19 @@ function App() {
                     <Download className="mr-2 h-4 w-4" />
                     Download
                   </Button>
+                  {submittedData?.editUrl && (
+                    <Button
+                      asChild
+                      variant={"outline"}
+                      className="font-medium px-4 rounded-md transition-colors duration-200 flex items-center"
+                    >
+                      <a href={submittedData.editUrl} target="_blank" rel="noopener noreferrer">
+                        <Edit className="mr-2 h-4 w-4" />
+                        Edit design
+                      </a>
+                    </Button>
+                  )}
+
                 </div>
               </div>
             )}
